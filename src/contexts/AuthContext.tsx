@@ -24,6 +24,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     // Escutar mudanças no estado da sessão
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
@@ -37,6 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [])
 
   const signOut = async () => {
+    if (!supabase) return
     await supabase.auth.signOut()
   }
 

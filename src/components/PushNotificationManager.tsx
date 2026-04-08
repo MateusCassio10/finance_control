@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 export default function PushNotificationManager() {
   useEffect(() => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !supabase) return
 
     const setupPush = async () => {
       try {
@@ -17,7 +17,7 @@ export default function PushNotificationManager() {
 
         if (!subscription) {
           // No GitHub Pages, você usaria o VAPID_PUBLIC_KEY configurado no Supabase
-          const { data } = await supabase.functions.invoke('get-vapid-key')
+          const { data } = await supabase!.functions.invoke('get-vapid-key')
           
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
@@ -26,9 +26,9 @@ export default function PushNotificationManager() {
         }
 
         // Salvar a subscrição diretamente no banco do Supabase
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user } } = await supabase!.auth.getUser()
         if (user) {
-          await supabase
+          await supabase!
             .from('push_subscriptions')
             .upsert({ 
               user_id: user.id, 

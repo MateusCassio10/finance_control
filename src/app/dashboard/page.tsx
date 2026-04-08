@@ -31,6 +31,8 @@ export default function Dashboard() {
   }, [user])
 
   const fetchHousehold = async () => {
+    if (!supabase) return
+    
     const { data } = await supabase
       .from('profiles')
       .select('*, households(*)')
@@ -45,6 +47,8 @@ export default function Dashboard() {
   }
 
   const fetchDashboardData = async () => {
+    if (!supabase) return
+    
     setLoading(true)
     const { data } = await supabase
       .from('transactions')
@@ -63,7 +67,7 @@ export default function Dashboard() {
 
   const handleAiInput = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isAiProcessing) return
+    if (!input.trim() || isAiProcessing || !supabase) return
 
     setIsAiProcessing(true)
     try {
@@ -75,7 +79,7 @@ export default function Dashboard() {
       setInput('')
       await fetchDashboardData()
       
-      if (household) {
+      if (household && supabase) {
         await supabase.functions.invoke('notify-partner', {
           body: { 
             message: `${user?.user_metadata?.name || 'Seu parceiro'} registrou: ${data.description}`,
