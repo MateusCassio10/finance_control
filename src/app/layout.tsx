@@ -4,8 +4,8 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import PushNotificationManager from '@/components/PushNotificationManager'
 
 export const metadata: Metadata = {
-  title: 'Bucks Flow Serverless',
-  description: 'Controle financeiro gratuito no GitHub Pages',
+  title: 'Bucks Flow Premium',
+  description: 'Controle financeiro inteligente',
   manifest: '/finance_control/manifest.json',
   appleWebApp: {
     capable: true,
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#22c55e',
+  themeColor: '#050505',
   width: 'device-width',
   initialScale: 1,
 }
@@ -27,7 +27,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased selection:bg-brand-500/30">
+      <body className="antialiased bg-[#050505] text-white">
         <AuthProvider>
           <PushNotificationManager />
           {children}
