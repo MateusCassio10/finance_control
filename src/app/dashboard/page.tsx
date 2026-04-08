@@ -5,7 +5,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { 
   Wallet, TrendingUp, TrendingDown, Plus, Sparkles, 
-  LogOut, Settings, Calendar, CreditCard, ArrowUpRight 
+  LogOut, Settings, Calendar, CreditCard, ArrowUpRight, ArrowDownRight,
+  User as UserIcon, Bell, Heart, Copy, UserPlus
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -16,10 +17,28 @@ export default function Dashboard() {
   const [balance, setBalance] = useState(0)
   const [input, setInput] = useState('')
   const [isAiProcessing, setIsAiProcessing] = useState(false)
+  const [household, setHousehold] = useState<any>(null)
+  const [inviteCode, setInviteCode] = useState('')
 
   useEffect(() => {
-    if (user) fetchDashboardData()
+    if (user) {
+      fetchDashboardData()
+      fetchHousehold()
+    }
   }, [user])
+
+  const fetchHousehold = async () => {
+    const { data } = await supabase
+      .from('households')
+      .select('*')
+      .single()
+    
+    if (data) {
+      setHousehold(data)
+    } else {
+      setInviteCode(user?.id.slice(0, 8).toUpperCase() || '')
+    }
+  }
 
   const fetchDashboardData = async () => {
     setLoading(true)
@@ -29,94 +48,145 @@ export default function Dashboard() {
       .order('created_at', { ascending: false })
       .limit(10)
     
-    if (data) setTransactions(data)
-    
-    // Cálculo simples de saldo (exemplo)
-    const total = data?.reduce((acc, curr) => 
-      curr.type === 'income' ? acc + curr.amount : acc - curr.amount, 0) || 0
-    setBalance(total)
+    if (data) {
+      setTransactions(data)
+      const total = data.reduce((acc, curr) => 
+        curr.type === 'income' ? acc + Number(curr.amount) : acc - Number(curr.amount), 0)
+      setBalance(total)
+    }
     setLoading(false)
   }
 
   const handleAiInput = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim()) return
+    if (!input.trim() || isAiProcessing) return
 
     setIsAiProcessing(true)
     try {
-      // Chama a Edge Function do Supabase (Segura)
       const { data, error } = await supabase.functions.invoke('parse-transaction', {
-        body: { input, userId: user?.id }
+        body: { 
+          input, 
+          userId: user?.id,
+          householdId: household?.id 
+        }
       })
 
       if (error) throw error
-
-      // Atualiza o dashboard
       setInput('')
-      fetchDashboardData()
+      await fetchDashboardData()
       
-      // Enviar notificação push para o parceiro (via Edge Function)
-      await supabase.functions.invoke('notify-partner', {
-        body: { message: `Seu parceiro(a) registrou: ${data.description}` }
-      })
-
+      // Notificar parceiro automaticamente
+      if (household) {
+        await supabase.functions.invoke('notify-partner', {
+          body: { 
+            message: `${user?.user_metadata?.name || 'Seu parceiro'} registrou: ${data.description}`,
+            householdId: household.id 
+          }
+        })
+      }
     } catch (err) {
-      console.error('Erro na IA:', err)
-      alert('A IA está em manutenção ou chaves não configuradas no Supabase.')
+      console.error('IA Error:', err)
     } finally {
       setIsAiProcessing(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-surface-950 text-white pb-20">
+    <div className="min-h-screen bg-[#050505] text-white selection:bg-green-500/30">
       {/* Header */}
-      <header className="p-6 flex justify-between items-center border-b border-white/5 bg-surface-950/50 backdrop-blur-lg sticky top-0 z-50">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-500/10 rounded-xl flex items-center justify-center">
-            <Wallet className="w-5 h-5 text-brand-500" />
+      <header className="px-6 py-8 flex justify-between items-center max-w-2xl mx-auto">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/5">
+            <UserIcon className="w-6 h-6 text-zinc-400" />
           </div>
           <div>
-            <h2 className="font-bold text-lg leading-none">Bucks Flow</h2>
-            <p className="text-[10px] text-surface-500 uppercase tracking-widest mt-1">Status: Online</p>
+            <p className="text-zinc-500 text-xs font-bold uppercase tracking-[0.2em]">Bem-vindo</p>
+            <h2 className="font-bold text-xl">{user?.user_metadata?.name || 'Usuário'}</h2>
           </div>
         </div>
-        <button onClick={signOut} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-          <LogOut className="w-5 h-5 text-surface-400" />
-        </button>
+        <div className="flex gap-2">
+          <button className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/5 hover:bg-white/10 transition-colors">
+            <Bell className="w-5 h-5 text-zinc-400" />
+          </button>
+          <button onClick={signOut} className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/5 hover:bg-red-500/10 group transition-colors">
+            <LogOut className="w-5 h-5 text-zinc-400 group-hover:text-red-400" />
+          </button>
+        </div>
       </header>
 
-      <main className="p-6 max-w-2xl mx-auto space-y-8">
+      <main className="px-6 max-w-2xl mx-auto pb-32 space-y-10">
         {/* Balance Card */}
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card p-8 bg-gradient-to-br from-brand-500/20 to-transparent relative overflow-hidden group"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="glass-card p-10 bg-gradient-to-br from-green-500/10 via-transparent to-transparent relative overflow-hidden"
         >
-          <div className="relative z-10">
-            <p className="text-surface-400 text-sm font-medium">Saldo Total</p>
-            <h3 className="text-4xl font-bold mt-2 tracking-tight">
-              R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          <div className="relative z-10 flex flex-col items-center text-center">
+            <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mb-3">Saldo Disponível</p>
+            <h3 className="text-5xl font-black tracking-tight">
+              <span className="text-zinc-600 mr-2 text-2xl font-bold">R$</span>
+              {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </h3>
-            <div className="flex gap-4 mt-6">
-              <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-full text-xs font-semibold">
-                <TrendingUp className="w-3 h-3" /> +12% esse mês
+            <div className="mt-8 flex gap-3">
+              <div className="bg-green-500/10 text-green-400 px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-wider border border-green-500/10">
+                +12% este mês
               </div>
             </div>
           </div>
-          <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-brand-500/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-700" />
+          <div className="absolute -top-24 -right-24 w-64 h-64 bg-green-500/5 rounded-full blur-[100px]" />
         </motion.div>
 
-        {/* AI Input Field */}
-        <div className="space-y-4">
-          <h4 className="text-xs font-bold text-surface-500 uppercase tracking-widest flex items-center gap-2">
-            <Sparkles className="w-3 h-3 text-brand-500" /> Assistente IA
-          </h4>
+        {/* Couple / Household Section */}
+        {!household && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-[#121212] border border-pink-500/10 p-6 rounded-[2rem] space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-pink-500/10 rounded-xl flex items-center justify-center">
+                <Heart className="w-5 h-5 text-pink-500" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold">Conectar Parceiro(a)</h4>
+                <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Controle financeiro a dois</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <div className="flex-1 bg-zinc-900 border border-white/5 rounded-2xl px-4 py-3 flex items-center justify-between">
+                <span className="font-mono text-sm tracking-widest text-zinc-400">{inviteCode}</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(inviteCode)
+                    alert('Código copiado!')
+                  }}
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  <Copy className="w-4 h-4 text-zinc-500" />
+                </button>
+              </div>
+              <button className="bg-pink-500 hover:bg-pink-600 text-white px-4 rounded-2xl transition-all active:scale-95">
+                <UserPlus className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-[9px] text-zinc-600 text-center px-4 italic">
+              Compartilhe seu código acima com seu parceiro para vincularem as contas.
+            </p>
+          </motion.div>
+        )}
+
+        {/* AI Input Section */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 px-2">
+            <Sparkles className="w-4 h-4 text-green-500" />
+            <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Bucks AI</h4>
+          </div>
           <form onSubmit={handleAiInput} className="relative group">
             <input
               type="text"
-              placeholder="Ex: Paguei 50 reais no almoco hoje"
-              className="w-full bg-surface-900/50 border border-white/5 rounded-3xl pl-6 pr-14 py-5 outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500/30 transition-all text-sm placeholder:text-surface-600"
+              placeholder="O que você comprou hoje?"
+              className="input-field"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={isAiProcessing}
@@ -124,74 +194,86 @@ export default function Dashboard() {
             <button 
               type="submit"
               disabled={isAiProcessing || !input}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-brand-500 rounded-2xl flex items-center justify-center hover:bg-brand-600 transition-colors disabled:opacity-30"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center hover:bg-green-400 transition-all active:scale-90 disabled:opacity-30"
             >
               {isAiProcessing ? (
-                <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                <div className="w-5 h-5 border-3 border-black/20 border-t-black rounded-full animate-spin" />
               ) : (
-                <Plus className="w-5 h-5 text-white" />
+                <Plus className="w-6 h-6 text-black" />
               )}
             </button>
           </form>
         </div>
 
-        {/* Recent Transactions */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-center px-1">
-            <h4 className="text-xs font-bold text-surface-500 uppercase tracking-widest">Atividade Recente</h4>
-            <button className="text-[10px] text-brand-500 font-bold uppercase hover:underline">Ver Todas</button>
+        {/* Transactions */}
+        <div className="space-y-6">
+          <div className="flex justify-between items-center px-2">
+            <h4 className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.3em]">Atividade</h4>
+            <button className="text-[10px] font-black text-green-500 uppercase tracking-widest hover:underline">Ver extrato</button>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-4">
             <AnimatePresence mode="popLayout">
               {transactions.map((tx, idx) => (
                 <motion.div 
                   key={tx.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  className="glass-card p-4 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer group"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="bg-[#121212] border border-white/5 p-5 rounded-[2rem] flex items-center justify-between group hover:border-zinc-700 transition-all"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                      tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
+                  <div className="flex items-center gap-5">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${
+                      tx.type === 'income' 
+                        ? 'bg-green-500/5 border-green-500/10 text-green-500' 
+                        : 'bg-zinc-900 border-white/5 text-zinc-400'
                     }`}>
-                      {tx.type === 'income' ? <ArrowUpRight className="w-6 h-6" /> : <CreditCard className="w-6 h-6" />}
+                      {tx.type === 'income' ? <ArrowUpRight className="w-7 h-7" /> : <ArrowDownRight className="w-7 h-7" />}
                     </div>
                     <div>
-                      <p className="font-semibold text-sm">{tx.description}</p>
-                      <p className="text-[10px] text-surface-500 mt-0.5">{tx.category} • {new Date(tx.created_at).toLocaleDateString('pt-BR')}</p>
+                      <p className="font-bold text-base text-zinc-100">{tx.description}</p>
+                      <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mt-1">
+                        {tx.category} • {new Date(tx.created_at).toLocaleDateString('pt-BR')}
+                      </p>
                     </div>
                   </div>
-                  <p className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-500' : 'text-white'}`}>
-                    {tx.type === 'income' ? '+' : '-'} R$ {tx.amount.toFixed(2)}
-                  </p>
+                  <div className="text-right">
+                    <p className={`font-black text-lg ${tx.type === 'income' ? 'text-green-500' : 'text-zinc-100'}`}>
+                      {tx.type === 'income' ? '+' : '-'} R$ {Number(tx.amount).toFixed(2)}
+                    </p>
+                  </div>
                 </motion.div>
               ))}
             </AnimatePresence>
 
             {transactions.length === 0 && !loading && (
-              <div className="text-center py-12 glass-card border-dashed">
-                <p className="text-surface-500 text-sm">Nenhuma transação encontrada.<br/>Use a IA para registrar seu primeiro gasto!</p>
+              <div className="py-20 text-center glass-card border-dashed">
+                <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CreditCard className="w-8 h-8 text-zinc-700" />
+                </div>
+                <p className="text-zinc-500 font-bold text-sm">Sem registros ainda.</p>
               </div>
             )}
           </div>
         </div>
       </main>
 
-      {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 p-4 bg-surface-950/80 backdrop-blur-2xl border-t border-white/5 flex justify-around items-center z-50">
-        <button className="p-3 text-brand-500 flex flex-col items-center gap-1">
-          <Wallet className="w-6 h-6" />
-          <span className="text-[8px] font-bold uppercase">Carteira</span>
+      {/* Bottom Nav */}
+      <nav className="fixed bottom-8 left-6 right-6 max-w-md mx-auto h-20 bg-black/80 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] flex justify-around items-center z-50 px-4 shadow-2xl">
+        <button className="p-4 text-green-500 flex flex-col items-center gap-1 transition-all scale-110">
+          <Wallet className="w-7 h-7" />
         </button>
-        <button className="p-3 text-surface-500 flex flex-col items-center gap-1 hover:text-brand-500 transition-colors">
-          <Calendar className="w-6 h-6" />
-          <span className="text-[8px] font-bold uppercase">Agenda</span>
+        <button className="p-4 text-zinc-600 hover:text-white transition-all">
+          <Calendar className="w-7 h-7" />
         </button>
-        <button className="p-3 text-surface-500 flex flex-col items-center gap-1 hover:text-brand-500 transition-colors">
-          <Settings className="w-6 h-6" />
-          <span className="text-[8px] font-bold uppercase">Ajustes</span>
+        <button className="p-4 text-zinc-600 hover:text-white transition-all">
+          <Plus className="w-7 h-7" />
+        </button>
+        <button className="p-4 text-zinc-600 hover:text-white transition-all">
+          <TrendingUp className="w-7 h-7" />
+        </button>
+        <button className="p-4 text-zinc-600 hover:text-white transition-all">
+          <Settings className="w-7 h-7" />
         </button>
       </nav>
     </div>
